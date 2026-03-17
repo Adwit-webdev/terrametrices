@@ -12,7 +12,7 @@ class TerraMetricsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TerraMetrics',
-      debugShowCheckedModeBanner: false, // Removes the ugly red debug banner
+      debugShowCheckedModeBanner: false, 
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.grey[100],
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),

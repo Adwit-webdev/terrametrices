@@ -2,8 +2,8 @@ import 'package:geolocator/geolocator.dart';
 
 class VibrationEvent {
   final Position location;
-  final double zAxisForce; // How severe the bump was
-  final DateTime timestamp; // When it happened
+  final double zAxisForce;
+  final DateTime timestamp; 
 
   VibrationEvent({
     required this.location,

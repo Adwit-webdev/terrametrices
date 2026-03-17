@@ -68,8 +68,7 @@ class _MacroMapScreenState extends State<MacroMapScreen> {
             ],
           ),
           
-          // 2. Dummy "Smoke and Mirrors" visual overlays for the demo video
-          // This gives a cool color tint to the map when you hit the switches
+          // 2. The Dummy GEE Overlays (Just colored containers for now)
           if (_showNDVI) 
             IgnorePointer(child: Container(color: Colors.green.withValues(alpha: 0.3))),
           if (_showLST) 

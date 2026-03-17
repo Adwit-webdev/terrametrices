@@ -12,10 +12,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Start on index 1 (Telematics) so you can instantly test your hardware code
   int _selectedIndex = 1; 
 
-  // The 3 main screens of TerraMetrics
+ 
   final List<Widget> _screens = [
     const MacroMapScreen(), // Placeholder
     const MicroTelematicsScreen(), // Your working Phase B engine
