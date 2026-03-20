@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../models/geo_point.dart';
 import '../services/geo_api_service.dart';
 import '../utils/constants.dart';
 
