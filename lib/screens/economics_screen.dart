@@ -1,122 +1,254 @@
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+
+import '../models/geo_point.dart';
+import '../services/geo_api_service.dart';
 import '../widgets/stat_card.dart';
 
-class EconomicsScreen extends StatelessWidget {
+class EconomicsScreen extends StatefulWidget {
   const EconomicsScreen({super.key});
+
+  @override
+  State<EconomicsScreen> createState() => _EconomicsScreenState();
+}
+
+class _EconomicsScreenState extends State<EconomicsScreen> {
+  final GeoApiService _geoApiService = GeoApiService();
+
+  EconomicsResult? _economicsResult;
+  int _roadDamageCount = 0;
+  bool _isLoading = true;
+  String? _error;
+
+  static const double _urbanGrowthRate = 0.145;
+  static const double _forestLossSqKm = 3.5;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEconomics();
+  }
+
+  Future<void> _loadEconomics() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final heatmap = await _geoApiService.fetchPotholeHeatmap();
+      final roadDamageCount = heatmap.length;
+      final economics = await _geoApiService.fetchInfrastructureDepreciation(
+        urbanGrowthRate: _urbanGrowthRate,
+        forestLossSqKm: _forestLossSqKm,
+        roadDamageCount: roadDamageCount,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _roadDamageCount = roadDamageCount;
+        _economicsResult = economics;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<FlSpot> _buildChartSpots() {
+    final totalCrore = (_economicsResult?.rawCostInr ?? 0) / 10000000;
+    const multipliers = [0.08, 0.14, 0.24, 0.42, 0.68, 1.0];
+    return List.generate(
+      multipliers.length,
+      (index) => FlSpot(index.toDouble(), totalCrore * multipliers[index]),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blueGrey[900], // Dark theme for a sleek financial look
+      backgroundColor: Colors.blueGrey[900],
       appBar: AppBar(
         title: const Text('Phase C: Infra-Portfolio Economics'),
         backgroundColor: Colors.black87,
         foregroundColor: Colors.tealAccent[400],
-        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _loadEconomics,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. The Top "Ticker" Metrics
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                StatCard(
-                  title: 'Est. Maintenance Deficit', 
-                  value: '₹ 4.2 Cr', 
-                  valueColor: Colors.redAccent
-                ),
-                StatCard(
-                  title: 'Permeable Surface Lost', 
-                  value: '14.5%', 
-                  valueColor: Colors.orangeAccent
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            
-            // 2. The Chart Title
-            const Text(
-              'Compounding Infrastructure Depreciation',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Cost correlation with expanding impermeable surfaces (2020-2026)',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            const SizedBox(height: 30),
-
-            // 3. The Line Chart (Using fl_chart)
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blueGrey[700]!),
-                ),
-                child: LineChart(
-                  LineChartData(
-                    gridData: const FlGridData(show: false),
-                    titlesData: FlTitlesData(
-                      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 22,
-                          getTitlesWidget: (value, meta) {
-                            // X-Axis represents years
-                            const style = TextStyle(color: Colors.grey, fontSize: 12);
-                            Widget text;
-                            switch (value.toInt()) {
-                              case 1: text = const Text('2021', style: style); break;
-                              case 3: text = const Text('2023', style: style); break;
-                              case 5: text = const Text('2025', style: style); break;
-                              default: text = const Text('', style: style); break;
-                            }
-                            return SideTitleWidget(axisSide: meta.axisSide, child: text);
-                          },
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.orangeAccent),
+                    ),
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          StatCard(
+                            title: 'Est. Maintenance Deficit',
+                            value: _economicsResult?.totalCostLabel ?? 'N/A',
+                            valueColor: Colors.redAccent,
+                          ),
+                          StatCard(
+                            title: 'Road Damage Events',
+                            value: _roadDamageCount.toString(),
+                            valueColor: Colors.orangeAccent,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blueGrey.shade700),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Backend Inputs',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Urban growth rate: ${(_urbanGrowthRate * 100).toStringAsFixed(1)}% | Forest loss: ${_forestLossSqKm.toStringAsFixed(1)} sq km | Road damage count: $_roadDamageCount',
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        // These spots represent [Year, Cost in Crores]
-                        spots: const [
-                          FlSpot(0, 0.25), // Year 0: Base maintenance (₹25 Lakhs)
-                          FlSpot(1, 0.30), // Year 1: Normal wear
-                          FlSpot(2, 0.55), // Year 2: Micro-cracks from water pooling
-                          FlSpot(3, 1.20), // Year 3: Pothole formation, localized patching
-                          FlSpot(4, 2.80), // Year 4: Sub-base failure due to poor drainage
-                          FlSpot(5, 5.50), // Year 5: Critical failure requiring major rehab
-                        ],
-                        isCurved: true,
-                        color: Colors.redAccent,
-                        barWidth: 4,
-                        isStrokeCapRound: true,
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.redAccent.withValues(alpha: 0.2),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Compounding Infrastructure Depreciation',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Live backend estimate with pothole heatmap count folded into the cost model.',
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blueGrey.shade700),
                           ),
+                          child: LineChart(
+                            LineChartData(
+                              gridData: const FlGridData(show: false),
+                              titlesData: FlTitlesData(
+                                leftTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                topTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                rightTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 22,
+                                    getTitlesWidget: (value, meta) {
+                                      const style = TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      );
+                                      final year = 2020 + value.toInt();
+                                      return SideTitleWidget(
+                                        axisSide: meta.axisSide,
+                                        child: Text('$year', style: style),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: _buildChartSpots(),
+                                  isCurved: true,
+                                  color: Colors.redAccent,
+                                  barWidth: 4,
+                                  isStrokeCapRound: true,
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    color: Colors.redAccent.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: (_economicsResult?.breakdown.entries.toList() ?? [])
+                            .map(
+                              (entry) => Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.blueGrey.shade700,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${entry.key}: ${entry.value}',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
-
-  // A helper widget to create clean metric cards
-  
 }

@@ -1,87 +1,114 @@
 import 'dart:async';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:terrametrics/models/vibration_event.dart';
-import '../utils/constants.dart';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:terrametrics/models/vibration_event.dart';
 
-class TelematicsService {
-  Future<void> sendHazardToBackend(double lat, double lng, double force) async {
-  final String apiUrl = 'https://terrametrics-api.onrender.com/api/v1/telemetry/sensor-data';
+import 'location_service.dart';
+import '../utils/constants.dart';
 
-  try {
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'latitude': lat,
-        'longitude': lng,
-        'z_force': force,
-        'timestamp': DateTime.now().toIso8601String(),
-      }),
-    );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      print('✅ SUCCESS: Pothole data sent to Kanishk\'s Cloud!');
-    } else {
-      print('❌ Backend rejected the data: ${response.statusCode}');
-    }
-  } catch (e) {
-    print('❌ Failed to connect to the cloud: $e');
-  }
-}
-  // We use a StreamSubscription so we can turn the sensor on and off
-  // to save battery when the user isn't driving.
+class TelematicsService extends ChangeNotifier {
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
+  final List<VibrationEvent> detectedHazards = [];
+  final LocationService _locationService = LocationService();
 
-  // The Z-axis is the up/down bounce of the phone.
-  // We set a threshold. If the bounce is stronger than 5.0 m/s², it's a pothole.
-  
-  
-  // A simple list to temporarily hold our detected road hazards
-  List<VibrationEvent> detectedHazards = [];
+  Future<void> sendHazardToBackend({
+    required double lat,
+    required double lon,
+    required double accX,
+    required double accY,
+    required double accZ,
+    required double speed,
+  }) async {
+    const String apiUrl =
+        'https://terrametrics-api.onrender.com/api/v1/telemetry/sensor-data';
 
-  /// Starts listening to the phone's physical movements
-  void startTracking() async {
-    // --- NEW PERMISSION CHECK CODE ---
+    try {
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'lat': lat,
+              'lon': lon,
+              'acc_x': accX,
+              'acc_y': accY,
+              'acc_z': accZ,
+              'speed': speed,
+              'timestamp': DateTime.now().toIso8601String(),
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print("SUCCESS: Pothole data sent to backend");
+      } else {
+        print("Backend rejected the data: ${response.statusCode}");
+        print("Response body: ${response.body}");
+      }
+    } on TimeoutException {
+      print("Backend request timed out");
+    } catch (e) {
+      print("Failed to connect to the backend: $e");
+    }
+  }
+
+  Future<void> startTracking() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        print("❌ GPS Permission Denied by User");
-        return; // Stop the engine if they say no
+        print("GPS permission denied by user");
+        return;
       }
     }
+
     if (permission == LocationPermission.deniedForever) {
-      print("❌ GPS Permission Permanently Denied");
-      return; 
+      print("GPS permission permanently denied");
+      return;
     }
 
-    // 2. Start listening to the hardware accelerometer
-  // Inside the accelerometer listener
-_accelerometerSubscription = userAccelerometerEventStream().listen((event) async {
-  if (event.z.abs() > AppConstants.bumpThreshold) {
-    Position currentPosition = await Geolocator.getCurrentPosition();
-    
-    // CONVERSION: speed is in m/s. 4.16 m/s is roughly 15 km/h.
-    if (currentPosition.speed > 4.16) { 
-      detectedHazards.add(VibrationEvent(
-        location: currentPosition,
-        zAxisForce: event.z,
-        timestamp: DateTime.now(),
-      ));
-      await sendHazardToBackend(currentPosition.latitude, currentPosition.longitude, event.z);
-      print("🚗 Vehicle Hazard Detected at ${currentPosition.speed} m/s");
-    } else {
-      print("🚶 Ignoring vibration: User speed too low (${currentPosition.speed} m/s)");
-    }
-  }
-});
+    _accelerometerSubscription =
+        userAccelerometerEventStream().listen((event) async {
+      if (event.z.abs() <= AppConstants.bumpThreshold) {
+        return;
+      }
+
+      final Position currentPosition = await _locationService.getCurrentPosition();
+
+      if (currentPosition.speed <= 4.16) {
+        print(
+          "Ignoring vibration: user speed too low (${currentPosition.speed} m/s)",
+        );
+        return;
+      }
+
+      detectedHazards.add(
+        VibrationEvent(
+          location: currentPosition,
+          zAxisForce: event.z,
+          timestamp: DateTime.now(),
+        ),
+      );
+      notifyListeners();
+
+      await sendHazardToBackend(
+        lat: currentPosition.latitude,
+        lon: currentPosition.longitude,
+        accX: event.x,
+        accY: event.y,
+        accZ: event.z,
+        speed: currentPosition.speed,
+      );
+      print("Vehicle hazard detected at ${currentPosition.speed} m/s");
+    });
   }
 
-  /// Stops tracking to save battery and memory
   void stopTracking() {
     _accelerometerSubscription?.cancel();
+    _accelerometerSubscription = null;
   }
 }

@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>TerraMetrics uses the camera to capture road hazard images for manual reports.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TerraMetrics uses your location to map hazards and submit manual reports.</string>
 </dict>
 </plist>
