@@ -35,7 +35,8 @@ dependencies:
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
   fl_chart: ^0.66.0
-  image_picker: ^1.1.2   # Allows access to the native camera and gallery
+  image_picker: ^1.1.2
+  http: ^1.2.0   # Allows access to the native camera and gallery
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

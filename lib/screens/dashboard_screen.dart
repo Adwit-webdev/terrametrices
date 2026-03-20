@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'micro_telematics_screen.dart'; 
 import 'macro_map_screen.dart';
 import 'economics_screen.dart';
-import 'report_hazard_screen.dart'; // Add this line// The map we just built!
+import 'report_hazard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
